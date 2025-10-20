@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Buscador de Escuelas IDEFEEY (Yucatán)</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background:#f4f7f6; }
+    .container { max-width:1400px; margin:0 auto; background:#fff; padding:20px; border-radius:8px; box-shadow:0 4px 8px rgba(0,0,0,0.08); }
+    h3 { color:#802434; margin-top:0; border-bottom:2px solid #802434; padding-bottom:8px; }
+    .filtros-grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-bottom:12px; }
+    input[type="text"], select { width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; }
+    .acciones { display:flex; gap:10px; margin-bottom:12px; align-items:center; }
+    button { padding:8px 12px; border-radius:4px; border:none; cursor:pointer; }
+    #btn-limpiar { background:#802434; color:#fff; }
+    .mensaje { color:#666; }
+
+    /* Tarjetas (móvil) */
+    .card { background:#fafafa; padding:12px; margin:8px 0; border-radius:6px; box-shadow:0 2px 4px rgba(0,0,0,0.08); }
+    .card h4 { margin:0 0 6px 0; color:#802434; }
+    .card p { margin:3px 0; font-size:13px; color:#444; }
+
+    /* Tabla (PC) */
+    table { width:100%; border-collapse:collapse; margin-top:10px; }
+    th, td { border:1px solid #ddd; padding:6px 8px; text-align:left; font-size:13px; }
+    th { background:#802434; color:#fff; position:sticky; top:0; }
+    tr:nth-child(even) { background:#f9f9f9; }
+    tr:hover { background:#f1f1f1; }
+    .table-wrapper {
+       width: 100%;
+       overflow-x: auto;
+       -webkit-overflow-scrolling: touch;
+     }
+
+
+    .pagination { margin-top:10px; text-align:center; }
+    .pagination button { margin:3px; padding:6px 10px; border-radius:4px; border:1px solid #ccc; background:#fff; cursor:pointer; }
+    .pagination button.active { background:#802434; color:#fff; border:none; }
+    .pagination button:disabled { background:#ddd; cursor:not-allowed; }
+
+    @media(min-width:900px){
+      #resultado .grid-cards { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+      #resultado .card { margin:0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h3>Buscador de Escuelas IDEFEEY (Yucatán)</h3>
+
+    <div class="filtros-grid">
+      <input id="cct" type="text" placeholder="CCT (Clave)">
+      <input id="nombre" type="text" placeholder="Nombre de la escuela">
+      <input id="municipio" type="text" placeholder="Municipio...">
+      <input id="localidad" type="text" placeholder="Localidad">
+      <input id="colonia" type="text" placeholder="Colonia">
+      <select id="subnivelSelect"><option value="">Subnivel (Todos)</option></select>
+    </div>
+
+    <div class="acciones">
+      <button id="btn-limpiar" onclick="limpiar()">Limpiar filtros</button>
+      <div class="mensaje" style="margin-left:auto">Escribe o cambia un filtro para buscar</div>
+    </div>
+
+    <div id="resultado">Cargando datos...</div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+  <script>
+    const JSON_URL = "https://raw.githubusercontent.com/mantenimientoidefeymerida-boop/escuelas-idefeey/refs/heads/main/escuelas_yucatan_2025-10-16.json";
+
+    let datosEscuelas = [];
+    let resultadosGlobal = [];
+    let currentPage = 1;
+    const rowsPerPage = 10;
+
+    const columnasOrdenadas = [
+      "CCT","NOMBRE","NIVEL","TURNO","SUBNIVEL",
+      "DIRECCION","MUNICIPIO","LOCALIDAD","COLONIA",
+      "REGION","SUPERVISOR","COMPARTE","UBICACIÓN","SOSTENIMIENTO"
+    ];
+
+    const esMovil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    function normalizar(txt) {
+      return txt ? txt.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : "";
+    }
+
+    async function cargarDatos() {
+      try {
+        const res = await fetch(JSON_URL);
+        datosEscuelas = await res.json();
+        inicializarFiltros();
+        document.getElementById('resultado').innerHTML = "Listo. Usa los filtros para buscar.";
+      } catch (err) {
+        document.getElementById('resultado').innerHTML = `<strong style="color:red">Error al cargar los datos.</strong>`;
+        console.error(err);
+      }
+    }
+
+    function inicializarFiltros() {
+      const subniveles = [...new Set(datosEscuelas.map(e => e["SUBNIVEL"]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es',{sensitivity:'base'}));
+      const sel = document.getElementById('subnivelSelect');
+      subniveles.forEach(s => {
+        const o = document.createElement('option');
+        o.value = s; o.textContent = s;
+        sel.appendChild(o);
+      });
+    }
+
+    function debounce(fn, wait) {
+      let t;
+      return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), wait); };
+    }
+
+    function buscar() {
+      const filtros = {
+        cct: normalizar(document.getElementById('cct').value),
+        nombre: normalizar(document.getElementById('nombre').value),
+        municipio: normalizar(document.getElementById('municipio').value),
+        localidad: normalizar(document.getElementById('localidad').value),
+        colonia: normalizar(document.getElementById('colonia').value),
+        subnivel: normalizar(document.getElementById('subnivelSelect').value)
+      };
+
+      resultadosGlobal = datosEscuelas.filter(fila => {
+        return (!filtros.cct || normalizar(fila["CCT"]).includes(filtros.cct)) &&
+               (!filtros.nombre || normalizar(fila["NOMBRE"]).includes(filtros.nombre)) &&
+               (!filtros.municipio || normalizar(fila["MUNICIPIO"]).includes(filtros.municipio)) &&
+               (!filtros.localidad || normalizar(fila["LOCALIDAD"]).includes(filtros.localidad)) &&
+               (!filtros.colonia || normalizar(fila["COLONIA"]).includes(filtros.colonia)) &&
+               (!filtros.subnivel || normalizar(fila["SUBNIVEL"]).includes(filtros.subnivel));
+      });
+
+      currentPage = 1;
+      renderResultados();
+      renderPaginacion();
+    }
+
+    const debouncedBuscar = debounce(buscar, 300);
+
+    function renderResultados() {
+      const cont = document.getElementById('resultado');
+      cont.innerHTML = '';
+
+      if (!resultadosGlobal || resultadosGlobal.length === 0) {
+        cont.innerHTML = '<div class="mensaje">No se encontraron resultados.</div>';
+        document.getElementById("pagination").innerHTML = "";
+        return;
+      }
+
+      const start = (currentPage - 1) * rowsPerPage;
+      const end = start + rowsPerPage;
+      const pageData = resultadosGlobal.slice(start, end);
+
+      if (esMovil) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'grid-cards';
+
+        pageData.forEach(item => {
+          const card = document.createElement('div');
+          card.className = 'card';
+          const titulo = document.createElement('h4');
+          titulo.textContent = `${item["NOMBRE"] || ''} (${item["CCT"] || ''})`;
+          card.appendChild(titulo);
+
+          columnasOrdenadas.forEach(col => {
+            if (col === 'NOMBRE' || col === 'CCT') return;
+            const val = item[col] ?? '';
+            const p = document.createElement('p');
+            if (col.toUpperCase() === 'UBICACIÓN' && val) {
+              p.innerHTML = `<strong>${col}:</strong> <a href="${val}" target="_blank">Ver mapa</a>`;
+            } else {
+              p.innerHTML = `<strong>${col}:</strong> ${val}`;
+            }
+            card.appendChild(p);
+          });
+          wrapper.appendChild(card);
+        });
+        cont.appendChild(wrapper);
+
+      } else {
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        columnasOrdenadas.forEach(c => {
+          const th = document.createElement('th');
+          th.textContent = c;
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        pageData.forEach(item => {
+          const tr = document.createElement('tr');
+          columnasOrdenadas.forEach(col => {
+            const td = document.createElement('td');
+            const val = item[col] ?? '';
+            if (col.toUpperCase() === 'UBICACIÓN' && val) {
+              td.innerHTML = `<a href="${val}" target="_blank">Ver mapa</a>`;
+            } else {
+              td.textContent = val;
+            }
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        const wrapper = document.createElement('div');
+              wrapper.className = 'table-wrapper';
+              wrapper.appendChild(table);
+              cont.appendChild(wrapper);
+
+      }
+    }
+
+    function renderPaginacion() {
+      const totalPages = Math.ceil(resultadosGlobal.length / rowsPerPage);
+      const pagDiv = document.getElementById('pagination');
+      pagDiv.innerHTML = '';
+      if (totalPages <= 1) return;
+
+      const prev = document.createElement('button');
+      prev.textContent = 'Anterior';
+      prev.disabled = currentPage === 1;
+      prev.onclick = () => { currentPage--; renderResultados(); renderPaginacion(); };
+      pagDiv.appendChild(prev);
+
+      for (let i = 1; i <= totalPages; i++) {
+        const btn = document.createElement('button');
+        btn.textContent = i;
+        if (i === currentPage) btn.classList.add('active');
+        btn.onclick = () => { currentPage = i; renderResultados(); renderPaginacion(); };
+        pagDiv.appendChild(btn);
+      }
+
+      const next = document.createElement('button');
+      next.textContent = 'Siguiente';
+      next.disabled = currentPage === totalPages;
+      next.onclick = () => { currentPage++; renderResultados(); renderPaginacion(); };
+      pagDiv.appendChild(next);
+
+      const info = document.createElement('span');
+      info.style.marginLeft = '10px';
+      info.textContent = `Página ${currentPage} de ${totalPages} (${resultadosGlobal.length} resultados)`;
+      pagDiv.appendChild(info);
+    }
+
+    function limpiar() {
+      document.querySelectorAll('input, select').forEach(e => e.value = '');
+      resultadosGlobal = [];
+      currentPage = 1;
+      document.getElementById('resultado').innerHTML = 'Filtros limpiados.';
+      document.getElementById('pagination').innerHTML = '';
+    }
+
+    document.querySelectorAll('#cct,#nombre,#municipio,#localidad,#colonia').forEach(el => el.addEventListener('input', debouncedBuscar));
+    document.getElementById('subnivelSelect').addEventListener('change', debouncedBuscar);
+
+    cargarDatos();
+  </script>
+</body>
+</html>
