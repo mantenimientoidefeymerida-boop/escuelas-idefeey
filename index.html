@@ -89,6 +89,16 @@
       font-size: 13px;
       color: #444;
     }
+    
+    /* Estilos para enlaces en tarjetas - CAMBIADO A AZUL */
+    .card a {
+      color: #0066cc;
+      text-decoration: none;
+    }
+
+    .card a:hover {
+      text-decoration: underline;
+    }
 
     /* Tabla (PC) */
     table {
@@ -124,6 +134,16 @@
       width: 100%;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
+    }
+
+    /* Estilos para enlaces en tabla - CAMBIADO A AZUL */
+    .table-wrapper a {
+      color: #0066cc;
+      text-decoration: none;
+    }
+
+    .table-wrapper a:hover {
+      text-decoration: underline;
     }
 
     .pagination {
@@ -206,6 +226,21 @@
       "REGION", "SUPERVISOR", "COMPARTE", "UBICACIÓN", "SOSTENIMIENTO"
     ];
     const esMovil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    // Mapa de enlaces por región
+    const mapasPorRegion = {
+      "REGION 1 ZN": "https://www.google.com/maps/d/edit?mid=1L_-JrftMntQ3m80WNfed94iOo8HMOU4&usp=sharing",
+      "REGION 1 ZS": "https://www.google.com/maps/d/edit?mid=1v5LaS3T3i8GE_Dd91Mm6hW3BsP0imn0&usp=sharing",
+      "REGION 2 ZS": "https://www.google.com/maps/d/edit?mid=1PoS1WDiTmPqddz7jQE9BnpI3LJAhynM&usp=sharing",
+      "REGION 3 ZN": "https://www.google.com/maps/d/edit?mid=1jL2Q4z_4sszo4e3y0KHTJSZRc3ErsPE&usp=sharing",
+      "REGION 4 ZS": "https://www.google.com/maps/d/edit?mid=19uCzZ9fV6nBC-O_zCOxjyb18epzgwCw&usp=sharing",
+      "REGION 5 ZN": "https://www.google.com/maps/d/edit?mid=19mp_sSbK7-WfDYsRYVj6VfurD90Fayw&usp=sharing",
+      "REGION 6 ZS": "https://www.google.com/maps/d/edit?mid=1L4PH4yGTHq01vJr184IGflxbHTEycL8&usp=sharing",
+      "REGION 7 ZS": "https://www.google.com/maps/d/edit?mid=1rV38VS7roiF8UxsqGEeBRxNYXkYdcmQ&usp=sharing",
+      "REGION 8 ZS": "https://www.google.com/maps/d/edit?mid=1tlXQvqlokTEpk8SByeTkCwY4MeSlhLY&usp=sharing",
+      "REGION 9 ZN": "https://www.google.com/maps/d/edit?mid=1Cx91WPmeeurRejDXb--XMkf-l5zJeVE&usp=sharing",
+      "REGION 10 ZN": "https://www.google.com/maps/d/edit?mid=1rjP5cdS7LhReyEa09n5EpSpxxSIKbMQ&usp=sharing"
+    };
 
     /**
      * Normaliza un texto para búsqueda (minúsculas, sin acentos, sin espacios al inicio/fin).
@@ -324,11 +359,25 @@
             if (col === 'NOMBRE' || col === 'CCT') return;
             const val = item[col] ?? '';
             const p = document.createElement('p');
-            if (col.toUpperCase() === 'UBICACIÓN' && val) {
-              p.innerHTML = `<strong>${col}:</strong> <a href="${val}" target="_blank">Ver mapa</a>`;
-            } else {
+            
+            // Si es la columna REGION, mostrar enlace al mapa de esa región
+            if (col.toUpperCase() === 'REGION' && val) {
+              const mapaUrl = mapasPorRegion[val] || '';
+              if (mapaUrl) {
+                p.innerHTML = `<strong>${col}:</strong> <a href="${mapaUrl}" target="_blank">${val}</a>`;
+              } else {
+                p.innerHTML = `<strong>${col}:</strong> ${val}`;
+              }
+            } 
+            // Si es la columna UBICACIÓN, mostrar enlace a la coordenada específica
+            else if (col.toUpperCase() === 'UBICACIÓN' && val) {
+              p.innerHTML = `<strong>${col}:</strong> <a href="${val}" target="_blank">Ver en mapa</a>`;
+            } 
+            // Resto de columnas
+            else {
               p.innerHTML = `<strong>${col}:</strong> ${val}`;
             }
+            
             card.appendChild(p);
           });
           wrapper.appendChild(card);
@@ -354,11 +403,25 @@
           columnasOrdenadas.forEach(col => {
             const td = document.createElement('td');
             const val = item[col] ?? '';
-            if (col.toUpperCase() === 'UBICACIÓN' && val) {
-              td.innerHTML = `<a href="${val}" target="_blank">Ver mapa</a>`;
-            } else {
+            
+            // Si es la columna REGION, mostrar enlace al mapa de esa región
+            if (col.toUpperCase() === 'REGION' && val) {
+              const mapaUrl = mapasPorRegion[val] || '';
+              if (mapaUrl) {
+                td.innerHTML = `<a href="${mapaUrl}" target="_blank">${val}</a>`;
+              } else {
+                td.textContent = val;
+              }
+            } 
+            // Si es la columna UBICACIÓN, mostrar enlace a la coordenada específica
+            else if (col.toUpperCase() === 'UBICACIÓN' && val) {
+              td.innerHTML = `<a href="${val}" target="_blank">Ver en mapa</a>`;
+            } 
+            // Resto de columnas
+            else {
               td.textContent = val;
             }
+            
             tr.appendChild(td);
           });
           tbody.appendChild(tr);
@@ -449,4 +512,3 @@
 </body>
 
 </html>
-
