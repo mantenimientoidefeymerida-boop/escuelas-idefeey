@@ -100,6 +100,17 @@
       text-decoration: underline;
     }
 
+    /* Estilo para el enlace de PDF */
+    .pdf-link {
+      color: #d32f2f; /* Rojo para identificar PDFs */
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .pdf-link:hover {
+      text-decoration: underline;
+    }
+
     /* Tabla (PC) */
     table {
       width: 100%;
@@ -197,6 +208,7 @@
       <select id="subnivelSelect">
         <option value="">Subnivel (Todos)</option>
       </select>
+      <!-- EL FILTRO "CON PDF" HA SIDO ELIMINADO -->
     </div>
 
     <div class="acciones">
@@ -214,16 +226,22 @@
     // LÓGICA JAVASCRIPT
     //
 
-    // URL pública del JSON en GitHub (ajústala si cambia)
+    // URL pública del JSON de escuelas en GitHub
     const JSON_URL = "https://raw.githubusercontent.com/mantenimientoidefeymerida-boop/escuelas-idefeey/refs/heads/main/escuelas_yucatan_2025-11-06.json";
+    
+    // URL pública del JSON de enlaces a PDFs en GitHub
+    // PASO 1: REEMPLAZA ESTA URL CON LA TUYA
+    const PDF_JSON_URL = "https://raw.githubusercontent.com/mantenimientoidefeymerida-boop/escuelas-idefeey/refs/heads/main/enlaces_pdf.json";
+    
     let datosEscuelas = [];
+    let pdfMappings = {}; // Objeto para almacenar los enlaces a PDFs (CCT -> URL)
     let resultadosGlobal = [];
     let currentPage = 1;
     const rowsPerPage = 10;
     const columnasOrdenadas = [
       "CCT", "NOMBRE", "NIVEL", "TURNO", "SUBNIVEL",
       "DIRECCION", "MUNICIPIO", "LOCALIDAD", "COLONIA",
-      "REGION", "SUPERVISOR", "COMPARTE", "UBICACIÓN", "SOSTENIMIENTO"
+      "REGION", "SUPERVISOR", "COMPARTE", "UBICACIÓN", "SOSTENIMIENTO", "PDF"
     ];
     const esMovil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
@@ -243,31 +261,50 @@
     };
 
     /**
-     * Normaliza un texto para búsqueda (minúsculas, sin acentos, sin espacios al inicio/fin).
-     * @param {string} txt - El texto a normalizar.
-     * @returns {string} El texto normalizado.
+     * Normaliza un texto para búsqueda.
      */
     function normalizar(txt) {
       return txt ? txt.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : "";
     }
 
     /**
-     * Carga los datos de las escuelas desde el JSON e inicializa los filtros.
+     * Carga los datos de las escuelas y los enlaces a PDFs.
      */
     async function cargarDatos() {
       try {
-        const res = await fetch(JSON_URL);
-        datosEscuelas = await res.json();
+        // Cargar datos de escuelas
+        const resEscuelas = await fetch(JSON_URL);
+        datosEscuelas = await resEscuelas.json();
+        
+        // Cargar enlaces a PDFs
+        try {
+          const resPDFs = await fetch(PDF_JSON_URL);
+          const pdfsArray = await resPDFs.json();
+          
+          // Convertir el array a un objeto para búsquedas más rápidas
+          pdfMappings = {};
+          pdfsArray.forEach(item => {
+            if (item.CCT && item.url) {
+              // Usamos el CCT como clave para una búsqueda directa
+              pdfMappings[item.CCT] = item.url;
+            }
+          });
+          
+          console.log(`Se cargaron ${Object.keys(pdfMappings).length} enlaces a PDFs.`);
+        } catch (errPDF) {
+          console.error("No se pudieron cargar los enlaces a PDFs. La aplicación continuará funcionando sin ellos.", errPDF);
+        }
+        
         inicializarFiltros();
         document.getElementById('resultado').innerHTML = "Listo. Usa los filtros para buscar.";
       } catch (err) {
-        document.getElementById('resultado').innerHTML = `<strong style="color:red">Error al cargar los datos.</strong>`;
+        document.getElementById('resultado').innerHTML = `<strong style="color:red">Error al cargar los datos de escuelas.</strong>`;
         console.error(err);
       }
     }
 
     /**
-     * Inicializa el select de Subnivel con los valores únicos del JSON.
+     * Inicializa el select de Subnivel.
      */
     function inicializarFiltros() {
       const subniveles = [...new Set(datosEscuelas.map(e => e["SUBNIVEL"]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es', {
@@ -283,10 +320,7 @@
     }
 
     /**
-     * Función de 'debounce' para limitar la frecuencia de ejecución de `buscar`.
-     * @param {function} fn - La función a ejecutar.
-     * @param {number} wait - El tiempo de espera en ms.
-     * @returns {function} La función con debounce.
+     * Función de 'debounce'.
      */
     function debounce(fn, wait) {
       let t;
@@ -297,7 +331,7 @@
     }
 
     /**
-     * Aplica los filtros de búsqueda a los datos de las escuelas.
+     * Aplica los filtros de búsqueda.
      */
     function buscar() {
       const filtros = {
@@ -307,9 +341,11 @@
         localidad: normalizar(document.getElementById('localidad').value),
         colonia: normalizar(document.getElementById('colonia').value),
         subnivel: normalizar(document.getElementById('subnivelSelect').value)
+        // EL FILTRO 'conPdf' HA SIDO ELIMINADO DE AQUÍ
       };
 
       resultadosGlobal = datosEscuelas.filter(fila => {
+        // Ya no se filtra por si tiene PDF o no
         return (
           (!filtros.cct || normalizar(fila["CCT"]).includes(filtros.cct)) &&
           (!filtros.nombre || normalizar(fila["NOMBRE"]).includes(filtros.nombre)) &&
@@ -328,7 +364,7 @@
     const debouncedBuscar = debounce(buscar, 300);
 
     /**
-     * Renderiza los resultados en el DOM (tarjetas para móvil, tabla para PC).
+     * Renderiza los resultados.
      */
     function renderResultados() {
       const cont = document.getElementById('resultado');
@@ -357,10 +393,27 @@
 
           columnasOrdenadas.forEach(col => {
             if (col === 'NOMBRE' || col === 'CCT') return;
+            
+            // Columna especial para PDF
+            if (col === 'PDF') {
+              const pdfUrl = pdfMappings[item["CCT"]]; // Buscar por CCT exacto
+              if (pdfUrl) {
+                const p = document.createElement('p');
+                const enlace = document.createElement('a');
+                enlace.href = pdfUrl;
+                enlace.target = '_blank';
+                enlace.className = 'pdf-link';
+                enlace.textContent = '📄 Plano'; // Icono y texto
+                p.appendChild(enlace);
+                card.appendChild(p);
+              }
+              // Si no hay PDF, no se muestra nada en esta columna
+              return;
+            }
+            
             const val = item[col] ?? '';
             const p = document.createElement('p');
             
-            // Si es la columna REGION, mostrar enlace al mapa de esa región
             if (col.toUpperCase() === 'REGION' && val) {
               const mapaUrl = mapasPorRegion[val] || '';
               if (mapaUrl) {
@@ -369,11 +422,9 @@
                 p.innerHTML = `<strong>${col}:</strong> ${val}`;
               }
             } 
-            // Si es la columna UBICACIÓN, mostrar enlace a la coordenada específica
             else if (col.toUpperCase() === 'UBICACIÓN' && val) {
-              p.innerHTML = `<strong>${col}:</strong> <a href="${val}" target="_blank">Ver en mapa</a>`;
+              p.innerHTML = `<strong>${col}:</strong> <a href="${val}" target="_blank">Ver en maps</a>`;
             } 
-            // Resto de columnas
             else {
               p.innerHTML = `<strong>${col}:</strong> ${val}`;
             }
@@ -402,9 +453,27 @@
           const tr = document.createElement('tr');
           columnasOrdenadas.forEach(col => {
             const td = document.createElement('td');
+            
+            // Columna especial para PDF
+            if (col === 'PDF') {
+              const pdfUrl = pdfMappings[item["CCT"]]; // Buscar por CCT exacto
+              if (pdfUrl) {
+                const enlace = document.createElement('a');
+                enlace.href = pdfUrl;
+                enlace.target = '_blank';
+                enlace.className = 'pdf-link';
+                enlace.textContent = '📄 Plano'; // Icono y texto
+                td.appendChild(enlace);
+              } else {
+                // Si no hay PDF, la celda queda vacía
+                td.textContent = '';
+              }
+              tr.appendChild(td);
+              return;
+            }
+            
             const val = item[col] ?? '';
             
-            // Si es la columna REGION, mostrar enlace al mapa de esa región
             if (col.toUpperCase() === 'REGION' && val) {
               const mapaUrl = mapasPorRegion[val] || '';
               if (mapaUrl) {
@@ -413,11 +482,9 @@
                 td.textContent = val;
               }
             } 
-            // Si es la columna UBICACIÓN, mostrar enlace a la coordenada específica
             else if (col.toUpperCase() === 'UBICACIÓN' && val) {
-              td.innerHTML = `<a href="${val}" target="_blank">Ver en mapa</a>`;
+              td.innerHTML = `<a href="${val}" target="_blank">Ver en maps</a>`;
             } 
-            // Resto de columnas
             else {
               td.textContent = val;
             }
@@ -445,42 +512,26 @@
 
       if (totalPages <= 1) return;
 
-      // Botón Anterior
       const prev = document.createElement('button');
       prev.textContent = 'Anterior';
       prev.disabled = currentPage === 1;
-      prev.onclick = () => {
-        currentPage--;
-        renderResultados();
-        renderPaginacion();
-      };
+      prev.onclick = () => { currentPage--; renderResultados(); renderPaginacion(); };
       pagDiv.appendChild(prev);
 
-      // Botones de Páginas
       for (let i = 1; i <= totalPages; i++) {
         const btn = document.createElement('button');
         btn.textContent = i;
         if (i === currentPage) btn.classList.add('active');
-        btn.onclick = () => {
-          currentPage = i;
-          renderResultados();
-          renderPaginacion();
-        };
+        btn.onclick = () => { currentPage = i; renderResultados(); renderPaginacion(); };
         pagDiv.appendChild(btn);
       }
 
-      // Botón Siguiente
       const next = document.createElement('button');
       next.textContent = 'Siguiente';
       next.disabled = currentPage === totalPages;
-      next.onclick = () => {
-        currentPage++;
-        renderResultados();
-        renderPaginacion();
-      };
+      next.onclick = () => { currentPage++; renderResultados(); renderPaginacion(); };
       pagDiv.appendChild(next);
 
-      // Información de resultados
       const info = document.createElement('span');
       info.style.marginLeft = '10px';
       info.textContent = `Página ${currentPage} de ${totalPages} (${resultadosGlobal.length} resultados)`;
@@ -488,7 +539,7 @@
     }
 
     /**
-     * Limpia todos los campos de filtro y reinicia el estado.
+     * Limpia todos los campos de filtro.
      */
     function limpiar() {
       document.querySelectorAll('input, select').forEach(e => e.value = '');
@@ -502,13 +553,13 @@
     // LÓGICA DE INICIO Y EVENTOS
     //
 
-    // Añadir el listener para la búsqueda con 'debounce'
+    // Añadir listeners para la búsqueda con 'debounce'
     document.querySelectorAll('#cct, #nombre, #municipio, #localidad, #colonia').forEach(el => el.addEventListener('input', debouncedBuscar));
     document.getElementById('subnivelSelect').addEventListener('change', debouncedBuscar);
+    // Se eliminó el listener del filtro 'conPdfSelect'
 
     // Cargar los datos al inicio
     cargarDatos();
   </script>
 </body>
-
 </html>
