@@ -30,12 +30,31 @@
       border-bottom: 2px solid #802434;
       padding-bottom: 8px;
     }
+    
+    /* CAMBIO: Contenedor para los filtros que será "sticky" */
+    .sticky-filters-container {
+      /* Estilos sticky solo para pantallas grandes */
+    }
+    
+    @media (min-width: 900px) {
+      .sticky-filters-container {
+        position: -webkit-sticky; /* Para Safari */
+        position: sticky;
+        top: 0;
+        z-index: 10; /* Asegura que esté por encima del contenido */
+        background-color: #fff; /* Fondo para que no se vea el texto por debajo */
+        padding: 10px 0;
+        margin: -20px -20px 20px -20px; /* Para que llegue a los bordes del contenedor */
+        border-bottom: 1px solid #eee;
+      }
+    }
 
     .filtros-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 10px;
       margin-bottom: 12px;
+      padding: 0 20px; /* Padding interno para los filtros */
     }
 
     input[type="text"],
@@ -52,6 +71,7 @@
       gap: 10px;
       margin-bottom: 12px;
       align-items: center;
+      padding: 0 20px; /* Padding interno para las acciones */
     }
 
     button {
@@ -130,7 +150,7 @@
       background: #802434;
       color: #fff;
       position: sticky;
-      top: 0;
+      top: 0; /* La cabecera de la tabla también es sticky */
     }
 
     tr:nth-child(even) {
@@ -199,21 +219,23 @@
   <div class="container">
     <h3>Buscador de Escuelas IDEFEEY (Yucatán)</h3>
 
-    <div class="filtros-grid">
-      <input id="cct" type="text" placeholder="CCT (Clave)">
-      <input id="nombre" type="text" placeholder="Nombre de la escuela">
-      <input id="municipio" type="text" placeholder="Municipio...">
-      <input id="localidad" type="text" placeholder="Localidad">
-      <input id="colonia" type="text" placeholder="Colonia">
-      <select id="subnivelSelect">
-        <option value="">Subnivel (Todos)</option>
-      </select>
-      <!-- EL FILTRO "CON PDF" HA SIDO ELIMINADO -->
-    </div>
+    <!-- CAMBIO: Se envuelven los filtros y acciones en un nuevo div -->
+    <div class="sticky-filters-container">
+      <div class="filtros-grid">
+        <input id="cct" type="text" placeholder="CCT (Clave)" autocomplete="off">
+        <input id="nombre" type="text" placeholder="Nombre de la escuela" autocomplete="off">
+        <input id="municipio" type="text" placeholder="Municipio..." autocomplete="off">
+        <input id="localidad" type="text" placeholder="Localidad" autocomplete="off">
+        <input id="colonia" type="text" placeholder="Colonia" autocomplete="off">
+        <select id="subnivelSelect" autocomplete="off">
+          <option value="">Subnivel (Todos)</option>
+        </select>
+      </div>
 
-    <div class="acciones">
-      <button id="btn-limpiar" onclick="limpiar()">Limpiar filtros</button>
-      <div class="mensaje" style="margin-left: auto">Escribe o cambia un filtro para buscar</div>
+      <div class="acciones">
+        <button id="btn-limpiar" onclick="limpiar()">Limpiar filtros</button>
+        <div class="mensaje" style="margin-left: auto">Escribe o cambia un filtro para buscar</div>
+      </div>
     </div>
 
     <div id="resultado">Cargando datos...</div>
@@ -223,14 +245,13 @@
 
   <script>
     //
-    // LÓGICA JAVASCRIPT
+    // LÓGICA JAVASCRIPT (SIN CAMBIOS)
     //
 
     // URL pública del JSON de escuelas en GitHub
     const JSON_URL = "https://raw.githubusercontent.com/mantenimientoidefeymerida-boop/escuelas-idefeey/refs/heads/main/escuelas_yucatan_2025-11-06.json";
     
     // URL pública del JSON de enlaces a PDFs en GitHub
-    // PASO 1: REEMPLAZA ESTA URL CON LA TUYA
     const PDF_JSON_URL = "https://raw.githubusercontent.com/mantenimientoidefeymerida-boop/escuelas-idefeey/refs/heads/main/enlaces_pdf.json";
     
     let datosEscuelas = [];
@@ -311,6 +332,8 @@
         sensitivity: 'base'
       }));
       const sel = document.getElementById('subnivelSelect');
+      // Limpiar opciones existentes antes de añadir nuevas
+      sel.innerHTML = '<option value="">Subnivel (Todos)</option>';
       subniveles.forEach(s => {
         const o = document.createElement('option');
         o.value = s;
@@ -341,11 +364,9 @@
         localidad: normalizar(document.getElementById('localidad').value),
         colonia: normalizar(document.getElementById('colonia').value),
         subnivel: normalizar(document.getElementById('subnivelSelect').value)
-        // EL FILTRO 'conPdf' HA SIDO ELIMINADO DE AQUÍ
       };
 
       resultadosGlobal = datosEscuelas.filter(fila => {
-        // Ya no se filtra por si tiene PDF o no
         return (
           (!filtros.cct || normalizar(fila["CCT"]).includes(filtros.cct)) &&
           (!filtros.nombre || normalizar(fila["NOMBRE"]).includes(filtros.nombre)) &&
@@ -556,7 +577,13 @@
     // Añadir listeners para la búsqueda con 'debounce'
     document.querySelectorAll('#cct, #nombre, #municipio, #localidad, #colonia').forEach(el => el.addEventListener('input', debouncedBuscar));
     document.getElementById('subnivelSelect').addEventListener('change', debouncedBuscar);
-    // Se eliminó el listener del filtro 'conPdfSelect'
+
+    // Se añade un evento para limpiar los filtros al cargar la página.
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.filtros-grid input, .filtros-grid select').forEach(element => {
+            element.value = '';
+        });
+    });
 
     // Cargar los datos al inicio
     cargarDatos();
